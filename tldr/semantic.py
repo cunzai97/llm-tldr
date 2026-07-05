@@ -12,10 +12,12 @@ Uses BAAI/bge-large-en-v1.5 for embeddings (1024 dimensions)
 and FAISS for fast vector similarity search.
 """
 
+import hashlib
 import json
 import logging
 import os
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -206,6 +208,26 @@ class EmbeddingUnit:
             "code_preview": self.code_preview,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "EmbeddingUnit":
+        """Create an EmbeddingUnit from a dictionary."""
+        return cls(
+            name=data.get("name", ""),
+            qualified_name=data.get("qualified_name", ""),
+            file=data.get("file", ""),
+            line=data.get("line", 1),
+            language=data.get("language", ""),
+            unit_type=data.get("unit_type", "function"),
+            signature=data.get("signature", ""),
+            docstring=data.get("docstring", ""),
+            calls=data.get("calls", []),
+            called_by=data.get("called_by", []),
+            cfg_summary=data.get("cfg_summary", ""),
+            dfg_summary=data.get("dfg_summary", ""),
+            dependencies=data.get("dependencies", ""),
+            code_preview=data.get("code_preview", ""),
+        )
+
 
 MODEL_NAME = "BAAI/bge-large-en-v1.5"  # Legacy, use SUPPORTED_MODELS
 
@@ -262,11 +284,15 @@ def get_model(model_name: Optional[str] = None):
     """
     global _model, _model_name
 
+    # Re-check env vars on each call (in case they were set after import)
+    api_base = os.environ.get("TLDR_EMBEDDING_API", _LOCAL_API_BASE)
+    api_model = os.environ.get("TLDR_EMBEDDING_MODEL", _LOCAL_API_MODEL)
+
     # Check for local API usage
-    if _LOCAL_API_BASE and _LOCAL_API_MODEL:
+    if api_base and api_model:
         if model_name is None or model_name == "local":
             if _model is None or _model_name != "local-api":
-                _model = LocalEmbeddingAdapter(_LOCAL_API_BASE, _LOCAL_API_MODEL)
+                _model = LocalEmbeddingAdapter(api_base, api_model)
                 _model_name = "local-api"
             return _model
 
@@ -1178,18 +1204,52 @@ def _detect_project_languages(project_path: Path, respect_ignore: bool = True) -
     return sorted(list(found_languages & set(ALL_LANGUAGES)))
 
 
+def _compute_file_checksum(filepath: str) -> str:
+    """Compute MD5 checksum of a file for change detection."""
+    try:
+        h = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        return h.hexdigest()
+    except (OSError, IOError):
+        return ""
+
+
+def _load_checksums(cache_dir: Path) -> Dict[str, str]:
+    """Load previously indexed file checksums."""
+    cksum_file = cache_dir / "checksums.json"
+    if cksum_file.exists():
+        try:
+            return json.loads(cksum_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
+def _save_checksums(cache_dir: Path, checksums: Dict[str, str]):
+    """Save indexed file checksums."""
+    cksum_file = cache_dir / "checksums.json"
+    cksum_file.write_text(json.dumps(checksums, indent=2))
+
+
 def build_semantic_index(
     project_path: str,
     lang: str = "python",
     model: Optional[str] = None,
     show_progress: bool = True,
     respect_ignore: bool = True,
+    incremental: bool = True,
 ) -> int:
     """Build and save FAISS index + metadata for a project.
 
     Creates:
     - .tldr/cache/semantic/index.faiss - Vector index
     - .tldr/cache/semantic/metadata.json - Unit metadata
+    - .tldr/cache/semantic/checksums.json - File checksums for incremental updates
+
+    Incremental mode: if no files changed, returns immediately with existing count.
+    If any file changed, rebuilds the full index.
 
     Args:
         project_path: Path to project root.
@@ -1197,6 +1257,7 @@ def build_semantic_index(
         model: Model name from SUPPORTED_MODELS or HuggingFace name.
         show_progress: Show progress spinner (default: True).
         respect_ignore: If True, respect .tldrignore patterns (default True).
+        incremental: If True, skip indexing if no files changed (default True).
 
     Returns:
         Number of indexed units.
@@ -1226,6 +1287,11 @@ def build_semantic_index(
     # Always store cache at project root, not scan path
     cache_dir = project_root / ".tldr" / "cache" / "semantic"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    index_file = cache_dir / "index.faiss"
+    metadata_file = cache_dir / "metadata.json"
+
+    # Load existing checksums for incremental indexing
+    old_checksums = _load_checksums(cache_dir) if incremental else {}
 
     # Extract all units (respecting .tldrignore) - scan from scan_path, not project_root
     if console:
@@ -1264,11 +1330,42 @@ def build_semantic_index(
     if not units:
         return 0
 
+    # Check for file changes (incremental mode)
+    if incremental and old_checksums:
+        new_checksums = {}
+        for unit in units:
+            full_path = str(scan_path / unit.file)
+            new_checksums[unit.file] = _compute_file_checksum(full_path)
+
+        # Check if any file changed
+        any_changed = any(
+            new_checksums.get(u.file) != old_checksums.get(u.file)
+            for u in units
+        )
+
+        if not any_changed:
+            if console:
+                console.print("[bold green]✓[/] All files up to date")
+            # Return count from existing index
+            if index_file.exists():
+                try:
+                    old_metadata = json.loads(metadata_file.read_text())
+                    return old_metadata.get("count", 0)
+                except Exception:
+                    pass
+            return 0
+
+        # Files changed - update checksums for full rebuild
+        old_checksums = new_checksums
+
     import numpy as np
 
     BATCH_SIZE = 64
     num_units = len(units)
     texts = [build_embedding_text(unit) for unit in units]
+
+    model_obj = get_model(model)
+    all_embeddings = []
 
     if console:
         from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -1280,9 +1377,6 @@ def build_semantic_index(
             console=console,
         ) as progress:
             task = progress.add_task("Computing embeddings...", total=num_units)
-
-            model_obj = get_model(model)
-            all_embeddings = []
 
             for i in range(0, num_units, BATCH_SIZE):
                 chunk_end = min(i + BATCH_SIZE, num_units)
@@ -1301,23 +1395,29 @@ def build_semantic_index(
                 all_embeddings.extend(np.array(result, dtype=np.float32))
 
                 progress.update(task, completed=chunk_end)
-
-            embeddings_matrix = np.vstack(all_embeddings)
     else:
-        model_obj = get_model(model)
-        result = model_obj.encode(
-            texts,
-            batch_size=BATCH_SIZE,
-            normalize_embeddings=True
-        )
-        embeddings_matrix = np.array(result, dtype=np.float32)
+        for i in range(0, num_units, BATCH_SIZE):
+            chunk_end = min(i + BATCH_SIZE, num_units)
+            chunk_texts = texts[i:chunk_end]
 
+            result = model_obj.encode(
+                chunk_texts,
+                batch_size=BATCH_SIZE,
+                normalize_embeddings=True
+            )
+            all_embeddings.extend(np.array(result, dtype=np.float32))
+
+    if not all_embeddings:
+        if console:
+            console.print("[yellow]No embeddings computed[/yellow]")
+        return 0
+
+    embeddings_matrix = np.vstack(all_embeddings)
     dimension = embeddings_matrix.shape[1]
+
+    # Save full index
     index = faiss.IndexFlatIP(dimension)
     index.add(embeddings_matrix)
-
-    # Save index
-    index_file = cache_dir / "index.faiss"
     faiss.write_index(index, str(index_file))
 
     # Save metadata with actual model used
@@ -1327,8 +1427,10 @@ def build_semantic_index(
         "dimension": dimension,
         "count": len(units),
     }
-    metadata_file = cache_dir / "metadata.json"
     metadata_file.write_text(json.dumps(metadata, indent=2))
+
+    # Save checksums
+    _save_checksums(cache_dir, old_checksums)
 
     if console:
         console.print(f"[bold green]✓[/] Indexed {len(units)} code units")
