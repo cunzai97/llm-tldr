@@ -29,8 +29,87 @@ ALL_LANGUAGES = ["python", "typescript", "javascript", "go", "rust", "java", "c"
 _model = None
 _model_name = None  # Track which model is loaded
 
+# Local OpenAI-compatible embedding API support
+_LOCAL_API_BASE = os.environ.get("TLDR_EMBEDDING_API", "")
+_LOCAL_API_MODEL = os.environ.get("TLDR_EMBEDDING_MODEL", "")
+_local_api_cache = {}  # Simple in-memory cache for embeddings
+
+class LocalEmbeddingAdapter:
+    """Adapter for local OpenAI-compatible embedding APIs (llama-server, Ollama, etc.)."""
+    
+    def __init__(self, api_base: str, model: str, dimension: int = 1024):
+        self.api_base = api_base.rstrip("/")
+        self.model = model
+        self.dimension = dimension
+        self._cache = {}
+        self._cache_max = 10000
+        self._cache_order = []
+    
+    def encode(self, texts, normalize_embeddings: bool = True, **kwargs):
+        """Encode text(s) into embedding vectors via local API."""
+        import numpy as np
+        
+        if isinstance(texts, str):
+            texts = [texts]
+        
+        results = []
+        for text in texts:
+            # Check cache
+            if text in self._cache:
+                results.append(self._cache[text])
+                continue
+            
+            # Call local API
+            try:
+                import urllib.request
+                import json as _json
+                
+                payload = _json.dumps({
+                    "model": self.model,
+                    "input": text
+                }).encode()
+                
+                req = urllib.request.Request(
+                    f"{self.api_base}/v1/embeddings",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = _json.loads(resp.read())
+                    embedding = data["data"][0]["embedding"]
+                    
+                    if normalize_embeddings:
+                        arr = np.array(embedding, dtype=np.float32)
+                        norm = np.linalg.norm(arr)
+                        if norm > 0:
+                            arr = arr / norm
+                        embedding = arr.tolist()
+                    
+                    # Cache with LRU-like eviction
+                    if len(self._cache) >= self._cache_max:
+                        oldest = self._cache_order.pop(0)
+                        self._cache.pop(oldest, None)
+                    
+                    self._cache[text] = embedding
+                    self._cache_order.append(text)
+                    results.append(embedding)
+                    
+            except Exception as e:
+                logger.warning(f"Local API embedding failed: {e}, using zero vector")
+                results.append([0.0] * self.dimension)
+        
+        return np.array(results, dtype=np.float32)
+
 # Supported models with approximate download sizes
 SUPPORTED_MODELS = {
+    "local": {
+        "hf_name": "local",
+        "size": "0",
+        "dimension": 1024,
+        "description": "Use local API (set TLDR_EMBEDDING_API + TLDR_EMBEDDING_MODEL)",
+    },
     "bge-large-en-v1.5": {
         "hf_name": "BAAI/bge-large-en-v1.5",
         "size": "1.3GB",
@@ -173,14 +252,23 @@ def get_model(model_name: Optional[str] = None):
     Args:
         model_name: Model key from SUPPORTED_MODELS, or None for default.
                    Can also be a full HuggingFace model name.
+                   Special value "local" uses TLDR_EMBEDDING_API env var.
 
     Returns:
-        SentenceTransformer model instance.
+        SentenceTransformer model instance or LocalEmbeddingAdapter.
 
     Raises:
         ValueError: If model not found or user declines download.
     """
     global _model, _model_name
+
+    # Check for local API usage
+    if _LOCAL_API_BASE and _LOCAL_API_MODEL:
+        if model_name is None or model_name == "local":
+            if _model is None or _model_name != "local-api":
+                _model = LocalEmbeddingAdapter(_LOCAL_API_BASE, _LOCAL_API_MODEL)
+                _model_name = "local-api"
+            return _model
 
     # Resolve model name
     if model_name is None:
@@ -463,6 +551,70 @@ def _parse_file_ast(file_path: Path, lang: str) -> dict:
         # Return empty result on any parsing error
         pass
 
+    # Tree-sitter parsing for TypeScript/JavaScript and other languages
+    if lang in ("typescript", "javascript", "tsx"):
+        try:
+            from tree_sitter import Language, Parser
+            import tree_sitter_typescript
+            import tree_sitter_javascript
+
+            parser = Parser()
+            if lang == "tsx":
+                parser.language = Language(tree_sitter_typescript.language_tsx())
+            elif lang == "typescript":
+                parser.language = Language(tree_sitter_typescript.language_typescript())
+            else:
+                parser.language = Language(tree_sitter_javascript.language())
+
+            tree = parser.parse(content.encode())
+
+            def walk_node(node, depth=0, parent_class=None):
+                """Recursively walk tree-sitter nodes to extract functions/classes."""
+                for child in node.children:
+                    if child.type in ("function_declaration", "function", "generator_function"):
+                        # Extract function name
+                        name_node = child.child_by_field_name("name")
+                        if name_node:
+                            func_name = name_node.text.decode()
+                            line = child.start_point[0]
+                            # Extract code preview
+                            end_line = min(child.end_point[0], line + 10)
+                            preview_lines = lines[line - 1:end_line]
+                            result["functions"][func_name] = {
+                                "line": line,
+                                "code_preview": "\n".join(preview_lines[:10])
+                            }
+
+                    elif child.type in ("method_definition", "field_definition"):
+                        # Method inside a class
+                        name_node = child.child_by_field_name("name")
+                        if name_node and parent_class:
+                            method_name = name_node.text.decode()
+                            line = child.start_point[0]
+                            end_line = min(child.end_point[0], line + 10)
+                            preview_lines = lines[line - 1:end_line]
+                            result["methods"][f"{parent_class}.{method_name}"] = {
+                                "line": line,
+                                "code_preview": "\n".join(preview_lines[:10])
+                            }
+
+                    elif child.type in ("class_declaration", "class"):
+                        # Extract class name and line
+                        name_node = child.child_by_field_name("name")
+                        if name_node:
+                            class_name = name_node.text.decode()
+                            line = child.start_point[0]
+                            result["classes"][class_name] = {"line": line}
+                            # Walk methods inside the class
+                            walk_node(child, depth + 1, parent_class=class_name)
+                    else:
+                        walk_node(child, depth + 1, parent_class)
+
+            walk_node(tree.root_node)
+
+        except Exception as e:
+            logger.debug(f"Tree-sitter parse failed for {file_path}: {e}")
+
     return result
 
 
@@ -732,6 +884,102 @@ def _process_file_for_extraction(
 
         except Exception as e:
             logger.debug(f"AST parse failed for {file_path}: {e}")
+
+    # Tree-sitter parsing for TypeScript/JavaScript
+    elif lang in ("typescript", "javascript", "tsx"):
+        try:
+            from tree_sitter import Language, Parser
+            import tree_sitter_typescript
+            import tree_sitter_javascript
+
+            parser = Parser()
+            if lang == "tsx":
+                parser.language = Language(tree_sitter_typescript.language_tsx())
+            elif lang == "typescript":
+                parser.language = Language(tree_sitter_typescript.language_typescript())
+            else:
+                parser.language = Language(tree_sitter_javascript.language())
+
+            tree = parser.parse(content.encode())
+
+            def get_node_text(node):
+                return node.text.decode() if node.text else ""
+
+            def get_param_text(params_node):
+                """Extract parameter text from a formal_parameters node."""
+                if not params_node or params_node.child_count == 0:
+                    return ""
+                # Get text between parentheses, excluding the parens themselves
+                start = params_node.start_point
+                end = params_node.end_point
+                if start[0] == end[0]:
+                    line = lines[start[0] - 1]
+                    return line[start[1]:end[1]].strip("() ")
+                return "..."
+
+            def walk_ts_node(node, parent_class=None):
+                """Recursively walk tree-sitter nodes for TypeScript."""
+                for child in node.children:
+                    if child.type in ("function_declaration", "function", "generator_function", "async_function_declaration"):
+                        name_node = child.child_by_field_name("name")
+                        if not name_node:
+                            # For arrow functions and function expressions, try first child
+                            for c in child.children:
+                                if c.type == "identifier":
+                                    name_node = c
+                                    break
+                        if name_node:
+                            func_name = get_node_text(name_node)
+                            line = child.start_point[0]
+                            end_line = min(child.end_point[0], line + 10)
+                            preview_lines = lines[line - 1:end_line]
+                            code_preview = "\n".join(preview_lines[:10])
+
+                            # Build signature
+                            params_node = child.child_by_field_name("parameters")
+                            params_text = get_param_text(params_node) if params_node else ""
+                            signature = f"function {func_name}({params_text})"
+
+                            ast_info["functions"][func_name] = {
+                                "line": line,
+                                "code_preview": code_preview
+                            }
+                            all_signatures[func_name] = signature
+
+                    elif child.type in ("method_definition", "field_definition"):
+                        name_node = child.child_by_field_name("name")
+                        if name_node and parent_class:
+                            method_name = get_node_text(name_node)
+                            line = child.start_point[0]
+                            end_line = min(child.end_point[0], line + 10)
+                            preview_lines = lines[line - 1:end_line]
+                            code_preview = "\n".join(preview_lines[:10])
+
+                            params_node = child.child_by_field_name("parameters")
+                            params_text = get_param_text(params_node) if params_node else ""
+                            signature = f"{method_name}({params_text})"
+
+                            key = f"{parent_class}.{method_name}"
+                            ast_info["methods"][key] = {
+                                "line": line,
+                                "code_preview": code_preview
+                            }
+                            all_signatures[key] = signature
+
+                    elif child.type in ("class_declaration", "class"):
+                        name_node = child.child_by_field_name("name")
+                        if name_node:
+                            class_name = get_node_text(name_node)
+                            line = child.start_point[0]
+                            ast_info["classes"][class_name] = {"line": line}
+                            walk_ts_node(child, parent_class=class_name)
+                    else:
+                        walk_ts_node(child, parent_class)
+
+            walk_ts_node(tree.root_node)
+
+        except Exception as e:
+            logger.debug(f"Tree-sitter parse failed for {file_path}: {e}")
 
     # Get dependencies (imports) - single call
     dependencies = ""
@@ -1136,9 +1384,13 @@ def semantic_search(
     units = metadata["units"]
 
     # Use model from metadata if not specified (ensures matching embeddings)
-    index_model = metadata.get("model")
-    if model is None and index_model:
-        model = index_model
+    # But always prefer local API if configured
+    if _LOCAL_API_BASE and _LOCAL_API_MODEL:
+        model = "local"  # Force local API for query embedding too
+    else:
+        index_model = metadata.get("model")
+        if model is None and index_model:
+            model = index_model
 
     # Embed query (with instruction prefix for BGE)
     query_text = f"Represent this code search query: {query}"
