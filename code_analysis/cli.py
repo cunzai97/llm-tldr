@@ -3,14 +3,14 @@
 TLDR-Code CLI - Token-efficient code analysis for LLMs.
 
 Usage:
-    tldr tree [path]                    Show file tree
-    tldr structure [path]               Show code structure (codemaps)
-    tldr search <pattern> [path]        Search files for pattern
-    tldr extract <file>                 Extract full file info
-    tldr context <entry> [--project]    Get relevant context for LLM
-    tldr cfg <file> <function>          Control flow graph
-    tldr dfg <file> <function>          Data flow graph
-    tldr slice <file> <func> <line>     Program slice
+    ca tree [path]                    Show file tree
+    ca structure [path]               Show code structure (codemaps)
+    ca search <pattern> [path]        Search files for pattern
+    ca extract <file>                 Extract full file info
+    ca context <entry> [--project]    Get relevant context for LLM
+    ca cfg <file> <function>          Control flow graph
+    ca dfg <file> <function>          Data flow graph
+    ca slice <file> <func> <line>     Program slice
 """
 import argparse
 import json
@@ -113,20 +113,20 @@ def _show_first_run_tip():
 def main():
     _show_first_run_tip()
     parser = argparse.ArgumentParser(
-        prog="tldr",
+        prog="ca",
         description="Token-efficient code analysis for LLMs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Version: %(prog)s """ + __version__ + """
 
 Examples:
-    tldr tree src/                      # File tree for src/
-    tldr structure . --lang python      # Code structure for Python files
-    tldr search "def process" .         # Search for pattern
-    tldr extract src/main.py            # Full file analysis
-    tldr context main --project .       # LLM context starting from main()
-    tldr cfg src/main.py process        # Control flow for process()
-    tldr slice src/main.py func 42      # Lines affecting line 42
+    ca tree src/                      # File tree for src/
+    ca structure . --lang python      # Code structure for Python files
+    ca search "def process" .         # Search for pattern
+    ca extract src/main.py            # Full file analysis
+    ca context main --project .       # LLM context starting from main()
+    ca cfg src/main.py process        # Control flow for process()
+    ca slice src/main.py func 42      # Lines affecting line 42
 
 Ignore Patterns:
     TLDR respects .tldrignore files (gitignore syntax).
@@ -141,8 +141,8 @@ Daemon:
     - Memory: ~50-100MB base, +500MB-1GB with semantic search
 
     Start explicitly:  tldr daemon start
-    Check status:      tldr daemon status
-    Stop:              tldr daemon stop
+    Check status:      ca daemon status
+    Stop:              ca daemon stop
 
 Semantic Search:
     First run downloads embedding model (1.3GB default).
