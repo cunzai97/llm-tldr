@@ -103,7 +103,7 @@ def _show_first_run_tip():
 
     # Show tip
     import sys
-    print("Tip: For Swift support, run: python -m tldr.install_swift", file=sys.stderr)
+    print("Tip: For Swift support, run: python -m code_analysis.install_swift", file=sys.stderr)
     print("     (This message appears once)", file=sys.stderr)
     print(file=sys.stderr)
 
@@ -262,6 +262,7 @@ Semantic Search:
         help="Slice direction",
     )
     slice_p.add_argument("--var", help="Variable to track (optional)")
+    slice_p.add_argument("--max", type=int, default=None, help="Max lines to return (default: no limit)")
     slice_p.add_argument("--lang", default=None, help="Language (auto-detected from extension if not specified)")
 
     # tldr calls <path>
@@ -726,7 +727,16 @@ Semantic Search:
                 variable=args.var,
                 language=lang,
             )
-            result = {"lines": sorted(lines), "count": len(lines)}
+            # Apply max limit if specified
+            if args.max and len(lines) > args.max:
+                # Keep lines closest to target line
+                sorted_lines = sorted(lines, key=lambda l: abs(l - args.line))
+                lines = set(sorted_lines[:args.max])
+            result = {
+                "lines": sorted(lines), 
+                "count": len(lines),
+                "direction": args.direction,
+            }
             print(json.dumps(result, indent=2))
 
         elif args.command == "calls":
@@ -880,7 +890,7 @@ Semantic Search:
             if args.background:
                 # Spawn background process (cross-platform)
                 subprocess.Popen(
-                    [sys.executable, "-m", "tldr.cli", "warm", str(project_path), "--lang", args.lang],
+                    [sys.executable, "-m", "code_analysis.cli", "warm", str(project_path), "--lang", args.lang],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     **_get_subprocess_detach_kwargs(),

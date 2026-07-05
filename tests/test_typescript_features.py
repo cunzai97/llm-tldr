@@ -1,5 +1,5 @@
 """
-Functional tests for TypeScript support in llm-tldr.
+Functional tests for TypeScript support in code-analysis.
 
 These tests verify that each feature actually works with TypeScript code,
 not just that the functions exist.

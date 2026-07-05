@@ -130,7 +130,7 @@ def _ensure_daemon(project: str, timeout: float = 10.0) -> None:
 
             # Start daemon
             subprocess.Popen(
-                [sys.executable, "-m", "tldr.cli", "daemon", "start", "--project", project],
+                [sys.executable, "-m", "code_analysis.cli", "daemon", "start", "--project", project],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,

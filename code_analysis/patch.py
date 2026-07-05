@@ -10,7 +10,7 @@ Key functions:
 - has_file_changed(file_path, cached_hash) - Check if file content changed
 
 Usage:
-    from tldr.patch import patch_call_graph, compute_file_hash, has_file_changed
+    from code_analysis.patch import patch_call_graph, compute_file_hash, has_file_changed
 
     # Check if file changed
     if has_file_changed(file_path, cached_hash):
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from tldr.cross_file_calls import (
+from code_analysis.cross_file_calls import (
     ProjectCallGraph,
     _extract_file_calls,
     _extract_ts_file_calls,

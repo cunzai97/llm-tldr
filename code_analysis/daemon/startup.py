@@ -314,7 +314,7 @@ def start_daemon(project_path: str | Path, foreground: bool = False):
                         startupinfo.wShowWindow = subprocess.SW_HIDE
 
                         proc = subprocess.Popen(
-                            [sys.executable, "-m", "tldr.daemon", str(project), "--foreground"],
+                            [sys.executable, "-m", "code_analysis.daemon", str(project), "--foreground"],
                             startupinfo=startupinfo,
                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
                             stdout=subprocess.DEVNULL,

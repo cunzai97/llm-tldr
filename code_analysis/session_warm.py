@@ -244,7 +244,7 @@ def maybe_warm_background(
         [
             sys.executable,
             "-m",
-            "tldr.cli",
+            "code_analysis.cli",
             "warm",
             str(project_path.resolve()),
             "--background",

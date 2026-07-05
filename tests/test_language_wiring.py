@@ -51,7 +51,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", INCREMENTAL_PARSE_LANGUAGES)
     def test_incremental_parse_supported_languages(self, language):
         """Language should be in IncrementalParser.SUPPORTED_LANGUAGES."""
-        from tldr.incremental_parse import IncrementalParser
+        from code_analysis.incremental_parse import IncrementalParser
 
         assert language in IncrementalParser.SUPPORTED_LANGUAGES, (
             f"{language} missing from incremental_parse.py SUPPORTED_LANGUAGES"
@@ -60,7 +60,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES.keys())
     def test_cli_extension_to_language(self, language):
         """Language extensions should be in cli.py EXTENSION_TO_LANGUAGE."""
-        from tldr.cli import EXTENSION_TO_LANGUAGE
+        from code_analysis.cli import EXTENSION_TO_LANGUAGE
 
         extensions = SUPPORTED_LANGUAGES[language]
         for ext in extensions:
@@ -74,7 +74,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES.keys())
     def test_semantic_all_languages(self, language):
         """Language should be in semantic.py ALL_LANGUAGES."""
-        from tldr.semantic import ALL_LANGUAGES
+        from code_analysis.semantic import ALL_LANGUAGES
 
         assert language in ALL_LANGUAGES, (
             f"{language} missing from semantic.py ALL_LANGUAGES"
@@ -83,7 +83,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES.keys())
     def test_scan_project_extensions(self, language):
         """Language should be recognized by scan_project()."""
-        from tldr.cross_file_calls import scan_project
+        from code_analysis.cross_file_calls import scan_project
         import tempfile
         import os
 
@@ -105,7 +105,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES.keys())
     def test_api_get_code_structure(self, language):
         """Language should work with get_code_structure()."""
-        from tldr.api import get_code_structure
+        from code_analysis.api import get_code_structure
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -124,7 +124,7 @@ class TestLanguageWiring:
     @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES.keys())
     def test_hybrid_extractor_detect_language(self, language):
         """Language should be detected by HybridExtractor._detect_language()."""
-        from tldr.hybrid_extractor import HybridExtractor
+        from code_analysis.hybrid_extractor import HybridExtractor
         import tempfile
 
         extractor = HybridExtractor()
@@ -157,7 +157,7 @@ class TestCFGExtractors:
     @pytest.mark.parametrize("language", CFG_LANGUAGES)
     def test_cfg_extractor_exists(self, language):
         """CFG extractor function should exist for language."""
-        from tldr import cfg_extractor as cfg_mod
+        from code_analysis import cfg_extractor as cfg_mod
 
         func_name = f"extract_{language}_cfg"
         assert hasattr(cfg_mod, func_name), (
@@ -191,7 +191,7 @@ class TestDFGExtractors:
     @pytest.mark.parametrize("language", DFG_LANGUAGES)
     def test_dfg_extractor_exists(self, language):
         """DFG extractor function should exist for language."""
-        from tldr import dfg_extractor as dfg_mod
+        from code_analysis import dfg_extractor as dfg_mod
 
         func_name = f"extract_{language}_dfg"
         assert hasattr(dfg_mod, func_name), (
@@ -212,7 +212,7 @@ class TestPDGExtractors:
     @pytest.mark.parametrize("language", PDG_LANGUAGES)
     def test_pdg_extractor_exists(self, language):
         """PDG extractor function should exist for language."""
-        from tldr import pdg_extractor as pdg_mod
+        from code_analysis import pdg_extractor as pdg_mod
 
         func_name = f"extract_{language}_pdg"
         assert hasattr(pdg_mod, func_name), (
@@ -235,7 +235,7 @@ class TestImportParsers:
     @pytest.mark.parametrize("language,func_name", IMPORT_PARSERS)
     def test_import_parser_exists(self, language, func_name):
         """Import parser function should exist for language."""
-        from tldr import cross_file_calls as cfc_mod
+        from code_analysis import cross_file_calls as cfc_mod
 
         assert hasattr(cfc_mod, func_name), (
             f"Missing {func_name} in cross_file_calls.py"
@@ -253,7 +253,7 @@ class TestCLIArguments:
 
         # Test that the language is accepted (won't error on invalid choice)
         result = subprocess.run(
-            [sys.executable, "-m", "tldr.cli", "structure", "--help"],
+            [sys.executable, "-m", "code_analysis.cli", "structure", "--help"],
             capture_output=True,
             text=True
         )

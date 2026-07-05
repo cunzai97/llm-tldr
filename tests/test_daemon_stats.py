@@ -20,7 +20,7 @@ class TestTokenCounting:
 
     def test_count_tokens_basic(self):
         """Should count tokens accurately for simple text."""
-        from tldr.stats import count_tokens
+        from code_analysis.stats import count_tokens
 
         # "Hello world" should be ~2-3 tokens
         result = count_tokens("Hello world")
@@ -28,7 +28,7 @@ class TestTokenCounting:
 
     def test_count_tokens_code(self):
         """Should count tokens for code content."""
-        from tldr.stats import count_tokens
+        from code_analysis.stats import count_tokens
 
         code = """def hello():
     print("Hello, world!")
@@ -40,13 +40,13 @@ class TestTokenCounting:
 
     def test_count_tokens_empty(self):
         """Should return 0 for empty string."""
-        from tldr.stats import count_tokens
+        from code_analysis.stats import count_tokens
 
         assert count_tokens("") == 0
 
     def test_count_tokens_large_file(self):
         """Should handle large files efficiently."""
-        from tldr.stats import count_tokens
+        from code_analysis.stats import count_tokens
 
         # 100KB of text
         large_text = "hello world " * 10000
@@ -59,7 +59,7 @@ class TestSessionStats:
 
     def test_session_stats_initialization(self):
         """New session should start with zero stats."""
-        from tldr.stats import SessionStats
+        from code_analysis.stats import SessionStats
 
         stats = SessionStats(session_id="test-123")
         assert stats.session_id == "test-123"
@@ -69,7 +69,7 @@ class TestSessionStats:
 
     def test_session_stats_record_request(self):
         """Should accumulate stats for each request."""
-        from tldr.stats import SessionStats
+        from code_analysis.stats import SessionStats
 
         stats = SessionStats(session_id="test-123")
         stats.record_request(raw_tokens=1000, tldr_tokens=150)
@@ -86,7 +86,7 @@ class TestSessionStats:
 
     def test_session_stats_savings(self):
         """Should calculate savings percentage correctly."""
-        from tldr.stats import SessionStats
+        from code_analysis.stats import SessionStats
 
         stats = SessionStats(session_id="test-123")
         stats.record_request(raw_tokens=1000, tldr_tokens=100)
@@ -96,7 +96,7 @@ class TestSessionStats:
 
     def test_session_stats_to_dict(self):
         """Should serialize to dict for JSON."""
-        from tldr.stats import SessionStats
+        from code_analysis.stats import SessionStats
 
         stats = SessionStats(session_id="test-123")
         stats.record_request(raw_tokens=1000, tldr_tokens=100)
@@ -114,7 +114,7 @@ class TestStatsStore:
 
     def test_stats_store_append(self):
         """Should append stats to JSONL file."""
-        from tldr.stats import SessionStats, StatsStore
+        from code_analysis.stats import SessionStats, StatsStore
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = StatsStore(Path(tmpdir) / "stats.jsonl")
@@ -134,7 +134,7 @@ class TestStatsStore:
 
     def test_stats_store_multiple_sessions(self):
         """Should handle multiple sessions in same file."""
-        from tldr.stats import SessionStats, StatsStore
+        from code_analysis.stats import SessionStats, StatsStore
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = StatsStore(Path(tmpdir) / "stats.jsonl")
@@ -154,7 +154,7 @@ class TestStatsStore:
 
     def test_stats_store_get_session_history(self):
         """Should retrieve history for specific session."""
-        from tldr.stats import SessionStats, StatsStore
+        from code_analysis.stats import SessionStats, StatsStore
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = StatsStore(Path(tmpdir) / "stats.jsonl")
@@ -175,7 +175,7 @@ class TestStatsStore:
 
     def test_stats_store_get_totals(self):
         """Should calculate all-time totals."""
-        from tldr.stats import SessionStats, StatsStore
+        from code_analysis.stats import SessionStats, StatsStore
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = StatsStore(Path(tmpdir) / "stats.jsonl")
@@ -199,7 +199,7 @@ class TestDaemonStatsIntegration:
 
     def test_daemon_tracks_session_stats(self):
         """Daemon should track stats per session ID."""
-        from tldr.daemon import TLDRDaemon
+        from code_analysis.daemon import TLDRDaemon
 
         # This tests that the daemon can accept and track session IDs
         # Implementation will add session tracking to daemon

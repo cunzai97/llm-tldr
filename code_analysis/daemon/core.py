@@ -17,9 +17,9 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from tldr.dedup import ContentHashedIndex
-from tldr.salsa import SalsaDB
-from tldr.stats import (
+from code_analysis.dedup import ContentHashedIndex
+from code_analysis.salsa import SalsaDB
+from code_analysis.stats import (
     HookStats,
     HookStatsStore,
     SessionStats,
@@ -581,7 +581,7 @@ class TLDRDaemon:
         """Handle call graph building command."""
         try:
             language = command.get("language", "python")
-            from tldr.cross_file_calls import build_project_call_graph
+            from code_analysis.cross_file_calls import build_project_call_graph
             graph = build_project_call_graph(self.project, language=language)
             result = {
                 "edges": [
@@ -599,7 +599,7 @@ class TLDRDaemon:
         """Handle cache warming command (builds call graph cache)."""
         try:
             language = command.get("language", "python")
-            from tldr.cross_file_calls import scan_project, build_project_call_graph
+            from code_analysis.cross_file_calls import scan_project, build_project_call_graph
 
             files = scan_project(self.project, language=language)
             graph = build_project_call_graph(self.project, language=language)
@@ -631,7 +631,7 @@ class TLDRDaemon:
         action = command.get("action", "search")
 
         try:
-            from tldr.semantic import build_semantic_index, semantic_search
+            from code_analysis.semantic import build_semantic_index, semantic_search
 
             if action == "index":
                 language = command.get("language", "python")
@@ -843,7 +843,7 @@ class TLDRDaemon:
 
                 # Run semantic index command
                 cmd = [
-                    sys.executable, "-m", "tldr.cli",
+                    sys.executable, "-m", "code_analysis.cli",
                     "semantic", "index", str(self.project)
                 ]
                 result = subprocess.run(
@@ -1029,7 +1029,7 @@ class TLDRDaemon:
                 continue
 
             try:
-                from tldr.ast_extractor import extract_file
+                from code_analysis.ast_extractor import extract_file
                 info = extract_file(str(full_path))
                 for func in info.get("functions", []):
                     changed_functions.add(func.get("name", ""))
@@ -1054,7 +1054,7 @@ class TLDRDaemon:
 
             # Search for imports of this module in test files
             try:
-                from tldr.cross_file_calls import scan_project
+                from code_analysis.cross_file_calls import scan_project
                 test_files = [f for f in scan_project(self.project) if "test" in f.lower()]
 
                 for test_file in test_files:

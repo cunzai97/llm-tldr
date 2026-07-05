@@ -502,7 +502,7 @@ def extract_python_dfg(code: str, function_name: str) -> DFGInfo:
     Returns:
         DFGInfo with variable references and def-use chains
     """
-    from tldr.cfg_extractor import extract_python_cfg
+    from code_analysis.cfg_extractor import extract_python_cfg
 
     tree = ast.parse(code)
 
@@ -556,7 +556,7 @@ def extract_python_dfg_with_cfg(code: str, function_name: str) -> DFGInfo:
     Returns:
         DFGInfo with variable references and def-use chains
     """
-    from tldr.cfg_extractor import extract_python_cfg
+    from code_analysis.cfg_extractor import extract_python_cfg
 
     tree = ast.parse(code)
 

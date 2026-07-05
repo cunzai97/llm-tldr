@@ -499,7 +499,7 @@ def extract_file(file_path: str | Path) -> ModuleInfo:
     - Other languages via Pygments fallback (signatures only)
     """
     # Use HybridExtractor which handles all languages
-    from tldr.hybrid_extractor import HybridExtractor
+    from code_analysis.hybrid_extractor import HybridExtractor
 
     extractor = HybridExtractor()
     return extractor.extract(file_path)

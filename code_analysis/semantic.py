@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
-logger = logging.getLogger("tldr.semantic")
+logger = logging.getLogger("code_analysis.semantic")
 
 ALL_LANGUAGES = ["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir"]
 
@@ -401,10 +401,10 @@ def extract_units_from_project(project_path: str, lang: str = "python", respect_
     """Extract all functions/methods/classes from a project.
 
     Uses existing TLDR APIs:
-    - tldr.api.get_code_structure() for L1 (signatures)
-    - tldr.cross_file_calls for L2 (call graph)
+    - code_analysis.api.get_code_structure() for L1 (signatures)
+    - code_analysis.cross_file_calls for L2 (call graph)
     - CFG/DFG extractors for L3/L4 summaries
-    - tldr.api.get_imports for L5 (dependencies)
+    - code_analysis.api.get_imports for L5 (dependencies)
 
     Args:
         project_path: Path to project root.
@@ -414,8 +414,8 @@ def extract_units_from_project(project_path: str, lang: str = "python", respect_
     Returns:
         List of EmbeddingUnit objects with enriched metadata.
     """
-    from tldr.api import get_code_structure, build_project_call_graph, get_imports
-    from tldr.tldrignore import load_ignore_patterns, should_ignore
+    from code_analysis.api import get_code_structure, build_project_call_graph, get_imports
+    from code_analysis.tldrignore import load_ignore_patterns, should_ignore
 
     project = Path(project_path).resolve()
     units = []
@@ -650,7 +650,7 @@ def _get_file_dependencies(file_path: Path, lang: str) -> str:
         return ""
 
     try:
-        from tldr.api import get_imports
+        from code_analysis.api import get_imports
         imports = get_imports(str(file_path), language=lang)
 
         # Extract module names (limit to first 5 for brevity)
@@ -674,7 +674,7 @@ def _get_cfg_summary(file_path: Path, func_name: str, lang: str) -> str:
         content = file_path.read_text()
 
         # Import the appropriate CFG extractor based on language
-        from tldr import cfg_extractor
+        from code_analysis import cfg_extractor
 
         extractor_map = {
             "python": cfg_extractor.extract_python_cfg,
@@ -715,7 +715,7 @@ def _get_dfg_summary(file_path: Path, func_name: str, lang: str) -> str:
         content = file_path.read_text()
 
         # Import the appropriate DFG extractor based on language
-        from tldr import dfg_extractor
+        from code_analysis import dfg_extractor
 
         extractor_map = {
             "python": dfg_extractor.extract_python_dfg,
@@ -1010,7 +1010,7 @@ def _process_file_for_extraction(
     # Get dependencies (imports) - single call
     dependencies = ""
     try:
-        from tldr.api import get_imports
+        from code_analysis.api import get_imports
         imports = get_imports(str(full_path), language=lang)
         modules = [imp.get("module", "") for imp in imports[:5] if imp.get("module")]
         dependencies = ", ".join(modules)
@@ -1025,12 +1025,12 @@ def _process_file_for_extraction(
     def _get_extractors(language: str):
         """Return (cfg_extractor, dfg_extractor) for the given language."""
         if language == "python":
-            from tldr.cfg_extractor import extract_python_cfg
-            from tldr.dfg_extractor import extract_python_dfg
+            from code_analysis.cfg_extractor import extract_python_cfg
+            from code_analysis.dfg_extractor import extract_python_dfg
             return extract_python_cfg, extract_python_dfg
         elif language in ("typescript", "javascript"):
-            from tldr.cfg_extractor import extract_typescript_cfg
-            from tldr.dfg_extractor import extract_typescript_dfg
+            from code_analysis.cfg_extractor import extract_typescript_cfg
+            from code_analysis.dfg_extractor import extract_typescript_dfg
             return extract_typescript_cfg, extract_typescript_dfg
         return None, None
 
@@ -1149,7 +1149,7 @@ def _get_progress_console():
 
 def _detect_project_languages(project_path: Path, respect_ignore: bool = True) -> List[str]:
     """Scan project files to detect present languages."""
-    from tldr.tldrignore import load_ignore_patterns, should_ignore
+    from code_analysis.tldrignore import load_ignore_patterns, should_ignore
 
     # Extension map (copied from cli.py to avoid circular import)
     EXTENSION_TO_LANGUAGE = {
@@ -1264,7 +1264,7 @@ def build_semantic_index(
     """
     import faiss
     import numpy as np
-    from tldr.tldrignore import ensure_tldrignore
+    from code_analysis.tldrignore import ensure_tldrignore
 
     console = _get_progress_console() if show_progress else None
 

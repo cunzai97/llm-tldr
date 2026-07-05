@@ -776,6 +776,9 @@ class TreeSitterCFGBuilder:
         elif node.type == "call" and self.language == "ruby":
             # Ruby: check for .each do |x| ... end pattern (iterators)
             self._visit_ruby_call(node)
+        elif node.type in {"call", "qualified_call"} and self.language in {"typescript", "javascript"}:
+            # JS/TS: check for callback patterns (Promise, .on, setTimeout, .then, etc.)
+            self._visit_js_callback(node)
         else:
             # Visit children for compound nodes
             for child in node.children:
@@ -825,6 +828,120 @@ class TreeSitterCFGBuilder:
             self.loop_guard_stack.pop()
             self.after_loop_stack.pop()
             self.current_block = after_loop
+        else:
+            # Regular method call, just visit children
+            for child in node.children:
+                if child.is_named:
+                    self._visit_node(child)
+
+    def _find_callbacks_in_node(self, node):
+        """Recursively find all callback patterns in a node tree.
+        
+        Returns list of (arrow_function/function_expression, func_name) tuples.
+        """
+        CALLBACK_METHODS = {
+            "on", "once", "addListener", "emit",  # EventEmitter
+            "then", "catch", "finally",  # Promise
+            "setTimeout", "setInterval", "setImmediate",  # Timers
+            "next", "error", "complete",  # Observable
+            "map", "filter", "reduce", "forEach", "flatMap",  # Array
+            "spawn", "exec", "fork", "child_process",  # Process
+            "promise",  # new Promise
+        }
+        
+        callbacks = []
+        
+        # Check for new_expression (new Promise(cb))
+        if node.type == "new_expression":
+            func_name = ""
+            for child in node.children:
+                if child.type in {"identifier", "property_identifier"}:
+                    func_name = child.text.decode('utf-8', errors='replace').lower()
+                    break
+            if func_name in CALLBACK_METHODS:
+                for child in node.children:
+                    if child.type == "arguments":
+                        for arg in child.children:
+                            if arg.type in {"arrow_function", "function_expression"}:
+                                callbacks.append((arg, func_name))
+        
+        # Check for call/qualified_call
+        if node.type in {"call", "qualified_call"}:
+            func_name = ""
+            if node.type == "qualified_call":
+                for child in node.children:
+                    if child.type == "property_identifier":
+                        func_name = child.text.decode('utf-8', errors='replace').lower()
+                        break
+            else:
+                first_child = node.children[0] if node.children else None
+                if first_child and first_child.type in {"identifier", "property_identifier"}:
+                    func_name = first_child.text.decode('utf-8', errors='replace').lower()
+            
+            if func_name in CALLBACK_METHODS:
+                for child in node.children:
+                    if child.type == "arguments":
+                        for arg in child.children:
+                            if arg.type in {"arrow_function", "function_expression"}:
+                                callbacks.append((arg, func_name))
+        
+        # Recurse into children
+        for child in node.children:
+            callbacks.extend(self._find_callbacks_in_node(child))
+        
+        return callbacks
+    
+    def _process_callbacks(self, callbacks):
+        """Process a list of callbacks, creating CFG blocks for each."""
+        if not callbacks:
+            return
+        
+        # Treat callbacks as parallel control flow paths
+        self.decision_points += len(callbacks)
+        
+        for cb_body, func_name in callbacks:
+            # Create a callback block
+            cb_block = self.new_block("callback", cb_body.start_point[0] + 1, cb_body.end_point[0] + 1)
+            
+            # Add edge from current block to callback
+            if self.current_block:
+                self.add_edge(self.current_block.id, cb_block.id, "callback")
+            
+            # Visit callback body
+            old_block = self.current_block
+            self.current_block = cb_block
+            
+            # Find body of arrow function
+            cb_content = None
+            for c in cb_body.children:
+                if c.type in {"statement_block", "concise_body"}:
+                    cb_content = c
+                    break
+            
+            if cb_content:
+                self._visit_node(cb_content)
+            
+            # Add edge from callback to exit
+            if self.current_block and self.current_block.id not in self.exit_block_ids:
+                self.exit_block_ids.append(self.current_block.id)
+            
+            self.current_block = old_block
+    
+    def _check_for_callbacks_in_node(self, node):
+        """Check for callback patterns in a node and process them."""
+        callbacks = self._find_callbacks_in_node(node)
+        if callbacks:
+            self._process_callbacks(callbacks)
+    
+    def _visit_js_callback(self, node):
+        """Handle JavaScript/TypeScript callback patterns.
+        
+        Detects: new Promise(cb), .on(event, cb), setTimeout(cb), .then(cb), etc.
+        Treats callback bodies as separate control flow paths.
+        """
+        callbacks = self._find_callbacks_in_node(node)
+        if callbacks:
+            self._process_callbacks(callbacks)
         else:
             # Regular method call, just visit children
             for child in node.children:
@@ -1098,6 +1215,10 @@ class TreeSitterCFGBuilder:
             self.exit_block_ids.append(self.current_block.id)
 
         self.current_block = self.new_block("body", node.start_point[0] + 1)
+        
+        # For JS/TS, check for callback patterns in the return expression
+        if self.language in {"typescript", "javascript"}:
+            self._check_for_callbacks_in_node(node)
 
     def _visit_break(self, node):
         """Handle break statements."""

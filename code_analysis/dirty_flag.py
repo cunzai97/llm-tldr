@@ -5,7 +5,7 @@ needs to be rebuilt due to file edits. Instead of rebuilding immediately
 on every edit, we mark files as dirty and rebuild lazily on query.
 
 Usage:
-    from tldr.dirty_flag import mark_dirty, is_dirty, clear_dirty
+    from code_analysis.dirty_flag import mark_dirty, is_dirty, clear_dirty
 
     # After editing a file
     mark_dirty(project_path, "src/auth.py")

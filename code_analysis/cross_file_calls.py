@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
 
-from tldr.workspace import WorkspaceConfig, load_workspace_config, filter_paths
+from code_analysis.workspace import WorkspaceConfig, load_workspace_config, filter_paths
 
 # Tree-sitter support for TypeScript
 try:

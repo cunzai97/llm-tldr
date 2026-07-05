@@ -1,4 +1,4 @@
-"""Entry point for `python -m tldr.daemon`."""
+"""Entry point for `python -m code_analysis.daemon`."""
 
 from .startup import main
 

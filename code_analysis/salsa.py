@@ -7,7 +7,7 @@ Salsa is rust-analyzer's incremental computation framework. Key concepts:
 3. **Minimal Re-computation**: Only affected queries re-run on change
 
 Example usage:
-    from tldr.salsa import SalsaDB, salsa_query
+    from code_analysis.salsa import SalsaDB, salsa_query
 
     @salsa_query
     def read_file(db: SalsaDB, path: str) -> str:

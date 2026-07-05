@@ -2,17 +2,17 @@
 Socket-based daemon that holds indexes in memory.
 
 This module is a backwards-compatibility wrapper. The actual implementation
-has been modularized into the tldr.daemon package:
-  - tldr.daemon.core: TLDRDaemon class
-  - tldr.daemon.startup: start_daemon, stop_daemon, query_daemon
-  - tldr.daemon.cached_queries: @salsa_query cached functions
+has been modularized into the code_analysis.daemon package:
+  - code_analysis.daemon.core: TLDRDaemon class
+  - code_analysis.daemon.startup: start_daemon, stop_daemon, query_daemon
+  - code_analysis.daemon.cached_queries: @salsa_query cached functions
 
-For new code, import directly from tldr.daemon:
-    from tldr.daemon import TLDRDaemon, start_daemon, query_daemon
+For new code, import directly from code_analysis.daemon:
+    from code_analysis.daemon import TLDRDaemon, start_daemon, query_daemon
 """
 
 # Re-export everything for backwards compatibility
-from tldr.daemon import (
+from code_analysis.daemon import (
     IDLE_TIMEOUT,
     TLDRDaemon,
     cached_architecture,

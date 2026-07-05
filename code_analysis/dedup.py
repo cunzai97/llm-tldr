@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
-from tldr.patch import compute_file_hash, extract_edges_from_file, Edge
+from code_analysis.patch import compute_file_hash, extract_edges_from_file, Edge
 
 
 @dataclass

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
-from tldr.cross_file_calls import ProjectCallGraph
+from code_analysis.cross_file_calls import ProjectCallGraph
 
 
 # Patterns that indicate a file is durable (rarely/never changes)

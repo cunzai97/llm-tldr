@@ -2,7 +2,7 @@
 TLDR Unified API - Token-efficient code context for LLMs.
 
 Usage:
-    from tldr.api import get_relevant_context
+    from code_analysis.api import get_relevant_context
 
     context = get_relevant_context(
         project="/path/to/project",
@@ -1629,8 +1629,8 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("Usage: python -m tldr.api <project_path> <entry_point> [depth] [language]")
-        print("Example: python -m tldr.api /path/to/project build_project_call_graph 2 python")
+        print("Usage: python -m code_analysis.api <project_path> <entry_point> [depth] [language]")
+        print("Example: python -m code_analysis.api /path/to/project build_project_call_graph 2 python")
         sys.exit(1)
 
     project_path = sys.argv[1]
